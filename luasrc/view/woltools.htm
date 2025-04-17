@@ -1,0 +1,721 @@
+<%+header%>
+<% 
+local uci = require "luci.model.uci".cursor()
+local devices = {}
+local sys = require "luci.sys"
+local util = require "luci.util"
+
+-- 获取所有物理网卡接口
+local interfaces = {}
+for _, iface in ipairs(sys.net.devices()) do
+    if not iface:match("^lo") then
+        table.insert(interfaces, iface)
+    end
+end
+
+-- 获取所有已配置的设备
+uci:foreach("woltools", "device", function(s)
+    table.insert(devices, {
+        hostname = s.name,
+        mac = s.mac,
+        interface = s.port or "br-lan"
+    })
+end)
+%>
+
+<style>
+:root {
+    --primary-color: #0078d7;
+    --primary-hover: #0063b1;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --border-color: #e0e0e0;
+    --bg-color: #f8f9fa;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.1);
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --transition: all 0.3s ease;
+    --table-border: 1px solid #dee2e6;
+}
+
+/* 页面整体样式 */
+body {
+    background-color: #f5f7fa;
+}
+
+.main-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 15px;
+}
+
+/* 标题样式 */
+.page-header {
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem;
+}
+
+.page-header h2 {
+    color: var(--primary-color);
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.page-description {
+    color: #666;
+    font-size: 1rem;
+    max-width: 800px;
+}
+
+/* 卡片样式 */
+.card {
+    background: white;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
+    margin-bottom: 2rem;
+    overflow: hidden;
+}
+
+.card-header {
+    padding: 1.2rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+    position: relative;
+}
+
+.card-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.card-header:after {
+    content: "";
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 50px;
+    height: 3px;
+    background: var(--primary-color);
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+/* 表格样式 */
+.device-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-bottom: 1.5rem;
+    border: var(--table-border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    box-shadow: 0 0 10px rgba(0,0,0,0.02);
+}
+
+.device-table th {
+    text-align: left;
+    padding: 1rem 1.25rem;
+    background-color: var(--bg-color);
+    font-weight: 600;
+    color: #444;
+    border-bottom: 2px solid var(--primary-color);
+}
+
+.device-table td {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+.device-table tr:last-child td {
+    border-bottom: none;
+}
+
+.device-table tbody tr:hover {
+    background-color: rgba(0, 120, 215, 0.05);
+}
+
+.device-table tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+/* 表单元素样式 */
+.form-control {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #495057;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+
+.form-control:focus {
+    border-color: var(--primary-color);
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+select.form-control {
+    appearance: none;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 12px;
+    padding-right: 2rem;
+}
+
+/* 按钮样式 */
+.btn {
+    display: inline-block;
+    font-weight: 500;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: middle;
+    user-select: none;
+    border: 1px solid transparent;
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.btn-primary {
+    color: #fff;
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+    border-color: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+}
+
+.btn-success {
+    color: #fff;
+    background-color: var(--success-color);
+    border-color: var(--success-color);
+}
+
+.btn-success:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+}
+
+.btn-danger {
+    color: #fff;
+    background-color: var(--danger-color);
+    border-color: var(--danger-color);
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+}
+
+.btn-sm {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    border-radius: 3px;
+}
+
+/* 添加设备表单 */
+.add-device-form {
+    background-color: var(--bg-color);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    margin-top: 2rem;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.add-device-form .device-table {
+    margin-bottom: 0;
+    border: none;
+    box-shadow: none;
+}
+
+.add-device-form .device-table td {
+    border-bottom: none;
+    padding: 0.75rem 1rem;
+}
+
+.add-device-form .device-table tr:hover {
+    background-color: transparent;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 15px;
+    align-items: center;
+}
+
+.form-group {
+    margin-bottom: 0;
+}
+
+.form-group-button {
+    text-align: center;
+}
+
+/* 辅助类 */
+.d-block { display: block !important; }
+.d-none { display: none !important; }
+
+@media (min-width: 768px) {
+    .d-md-block { display: block !important; }
+    .d-md-none { display: none !important; }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .card-body {
+        padding: 1.25rem 1rem;
+    }
+    
+    .btn {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+    }
+    
+    .device-table, .device-table thead, .device-table tbody, .device-table th, .device-table td, .device-table tr {
+        display: block;
+    }
+    
+    .device-table thead tr {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+    }
+    
+    .device-table tr {
+        border: 1px solid var(--border-color);
+        margin-bottom: 1rem;
+        border-radius: var(--radius-sm);
+        background-color: #fff;
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .device-table td {
+        border: none;
+        border-bottom: 1px solid var(--border-color);
+        position: relative;
+        padding-left: 50%;
+        text-align: right;
+        min-height: 3.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+    }
+    
+    .device-table td:last-child {
+        border-bottom: none;
+    }
+    
+    .device-table td:before {
+        position: absolute;
+        top: 50%;
+        left: 1rem;
+        width: 45%;
+        padding-right: 10px;
+        white-space: nowrap;
+        content: attr(data-label);
+        font-weight: bold;
+        transform: translateY(-50%);
+        text-align: left;
+        color: #555;
+    }
+    
+    .add-device-form .device-table td {
+        display: block;
+        width: 100%;
+        padding: 0.75rem 1rem;
+        text-align: left;
+        border: none;
+        min-height: auto;
+    }
+    
+    .add-device-form .device-table td:last-child {
+        padding-bottom: 1rem;
+        padding-top: 0.75rem;
+        text-align: center;
+    }
+    
+    .action-buttons {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+    }
+    
+    .action-buttons .btn {
+        flex: 1;
+        margin: 0 5px;
+    }
+    
+    .action-buttons .btn:first-child {
+        margin-left: 0;
+    }
+    
+    .action-buttons .btn:last-child {
+        margin-right: 0;
+    }
+}
+
+/* Toast通知样式 */
+.toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: var(--radius-sm);
+    color: white;
+    font-weight: 500;
+    box-shadow: var(--shadow-md);
+    z-index: 9999;
+    transform: translateX(120%);
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.toast.show {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.toast-success {
+    background-color: var(--success-color);
+}
+
+.toast-error {
+    background-color: var(--danger-color);
+}
+
+.toast-info {
+    background-color: var(--primary-color);
+}
+
+/* 加载状态样式 */
+.loading {
+    position: relative;
+    color: transparent !important;
+    pointer-events: none;
+}
+
+.loading:after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+
+<div class="main-container">
+    <div class="page-header">
+        <h2><%:局域网唤醒工具%></h2>
+        <div class="page-description"><%:通过发送特殊的网络数据包来远程唤醒局域网内的计算机。%></div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <h3><%:设备列表%></h3>
+        </div>
+        <div class="card-body">
+            <% if #devices > 0 then %>
+            <table class="device-table">
+                <thead>
+                    <tr>
+                        <th><%:主机名%></th>
+                        <th><%:MAC地址%></th>
+                        <th><%:网络接口%></th>
+                        <th><%:操作%></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% for _, device in ipairs(devices) do %>
+                    <tr>
+                        <td data-label="<%:主机名%>"><%=device.hostname%></td>
+                        <td data-label="<%:MAC地址%>"><%=device.mac%></td>
+                        <td data-label="<%:网络接口%>">
+                            <select class="form-control" onchange="updateInterface('<%=device.mac%>', this.value)" data-original="<%=device.interface%>">
+                                <% 
+                                local physical_interfaces = {}
+                                for _, iface in ipairs(interfaces) do
+                                    if iface:match("^eth") or iface:match("^wlan") then
+                                        table.insert(physical_interfaces, iface)
+                                    end
+                                end
+                                for _, iface in ipairs(physical_interfaces) do
+                                %>
+                                <option value="<%=iface%>" <%=iface == device.interface and "selected" or ""%>><%=iface%></option>
+                                <% end %>
+                            </select>
+                        </td>
+                        <td data-label="<%:操作%>">
+                            <div class="action-buttons">
+                                <button class="btn btn-primary btn-sm" onclick="wakeDevice('<%=device.mac%>')" title="<%:唤醒设备%>"><%:唤醒%></button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteDevice('<%=device.mac%>')" title="<%:删除设备%>"><%:删除%></button>
+                            </div>
+                        </td>
+                    </tr>
+                    <% end %>
+                </tbody>
+            </table>
+            <% else %>
+            <div style="text-align: center; padding: 2rem 0; color: #666;">
+                <p><%:没有设备，请添加一个设备%></p>
+            </div>
+            <% end %>
+            
+            <div class="add-device-form">
+                <h4 style="margin-top: 0; margin-bottom: 1.25rem; color: #444; font-size: 1.1rem; font-weight: 600;"><%:添加新设备%></h4>
+                <table class="device-table" style="background-color: transparent;">
+                    <thead style="visibility: hidden; height: 0;">
+                        <tr>
+                            <th><%:主机名%></th>
+                            <th><%:MAC地址%></th>
+                            <th><%:网络接口%></th>
+                            <th><%:操作%></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                <label for="new-hostname" class="d-block d-md-none" style="margin-bottom: 0.5rem; font-weight: 500;"><%:主机名%></label>
+                                <input type="text" class="form-control" id="new-hostname" placeholder="<%:主机名%>">
+                            </td>
+                            <td>
+                                <label for="new-mac" class="d-block d-md-none" style="margin-bottom: 0.5rem; font-weight: 500;"><%:MAC地址%></label>
+                                <input type="text" class="form-control" id="new-mac" placeholder="<%:MAC地址%>">
+                            </td>
+                            <td>
+                                <label for="new-interface" class="d-block d-md-none" style="margin-bottom: 0.5rem; font-weight: 500;"><%:网络接口%></label>
+                                <select class="form-control" id="new-interface">
+                                    <% 
+                                    local physical_interfaces = {}
+                                    for _, iface in ipairs(interfaces) do
+                                        if iface:match("^eth") or iface:match("^wlan") then
+                                            table.insert(physical_interfaces, iface)
+                                        end
+                                    end
+                                    for _, iface in ipairs(physical_interfaces) do
+                                    %>
+                                    <option value="<%=iface%>"><%=iface%></option>
+                                    <% end %>
+                                </select>
+                            </td>
+                            <td>
+                                <button class="btn btn-success" onclick="addDevice()"><%:添加设备%></button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+function showToast(message, type) {
+    // 创建toast元素
+    var toast = document.createElement('div');
+    toast.className = 'toast toast-' + (type || 'info');
+    toast.innerHTML = message;
+    document.body.appendChild(toast);
+    
+    // 显示动画
+    setTimeout(function() {
+        toast.classList.add('show');
+    }, 10);
+    
+    // 3秒后移除
+    setTimeout(function() {
+        toast.classList.remove('show');
+        setTimeout(function() {
+            document.body.removeChild(toast);
+        }, 300);
+    }, 3000);
+}
+
+function wakeDevice(mac) {
+    var button = event.target;
+    button.classList.add('loading');
+    
+    var xhr = new XHR();
+    xhr.get('<%=luci.dispatcher.build_url("admin", "network", "woltools", "wake")%>' + '?mac=' + mac, null, function(x, data) {
+        button.classList.remove('loading');
+        if (data && data.result) {
+            showToast('设备唤醒命令已发送', 'success');
+        } else {
+            showToast('设备唤醒失败', 'error');
+        }
+    });
+}
+
+function formatMAC(mac) {
+    // 移除所有非十六进制字符
+    mac = mac.replace(/[^0-9A-Fa-f]/g, '');
+    
+    // 确保长度为12个字符
+    if (mac.length !== 12) {
+        return false;
+    }
+    
+    // 格式化为标准MAC地址格式 XX:XX:XX:XX:XX:XX
+    return mac.match(/.{2}/g).join(':').toUpperCase();
+}
+
+function validateMAC(mac) {
+    var pattern = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
+    return pattern.test(mac);
+}
+
+function addDevice() {
+    var hostname = document.getElementById('new-hostname').value.trim();
+    var mac = document.getElementById('new-mac').value.trim();
+    var interface = document.getElementById('new-interface').value;
+    
+    if (!hostname) {
+        showToast('请输入设备主机名', 'error');
+        document.getElementById('new-hostname').focus();
+        return;
+    }
+    
+    if (!mac) {
+        showToast('请输入MAC地址', 'error');
+        document.getElementById('new-mac').focus();
+        return;
+    }
+    
+    // 尝试格式化MAC地址
+    if (!validateMAC(mac)) {
+        var formattedMAC = formatMAC(mac);
+        if (formattedMAC) {
+            mac = formattedMAC;
+            document.getElementById('new-mac').value = mac;
+        } else {
+            showToast('MAC地址格式不正确', 'error');
+            document.getElementById('new-mac').focus();
+            return;
+        }
+    }
+    
+    var button = event.target;
+    button.classList.add('loading');
+    
+    var xhr = new XHR();
+    xhr.post('<%=luci.dispatcher.build_url("admin", "network", "woltools", "add")%>', 
+        { hostname: hostname, mac: mac, interface: interface },
+        function(x, data) {
+            button.classList.remove('loading');
+            if (data && data.result) {
+                showToast('设备添加成功', 'success');
+                // 清空输入框
+                document.getElementById('new-hostname').value = '';
+                document.getElementById('new-mac').value = '';
+                setTimeout(function() {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                showToast('添加设备失败', 'error');
+            }
+        }
+    );
+}
+
+function deleteDevice(mac) {
+    if (!confirm('确定要删除这个设备吗？')) {
+        return;
+    }
+    
+    var button = event.target;
+    button.classList.add('loading');
+    
+    var xhr = new XHR();
+    xhr.post('<%=luci.dispatcher.build_url("admin", "network", "woltools", "delete")%>', 
+        { mac: mac },
+        function(x, data) {
+            button.classList.remove('loading');
+            if (data && data.result) {
+                showToast('设备已删除', 'success');
+                setTimeout(function() {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                showToast('删除设备失败', 'error');
+            }
+        }
+    );
+}
+
+function updateInterface(mac, interface) {
+    var select = event.target;
+    var originalValue = select.getAttribute('data-original');
+    
+    if (interface === originalValue) return;
+    
+    select.classList.add('loading');
+    
+    var xhr = new XHR();
+    xhr.post('<%=luci.dispatcher.build_url("admin", "network", "woltools", "update")%>', 
+        { mac: mac, interface: interface },
+        function(x, data) {
+            select.classList.remove('loading');
+            if (data && data.result) {
+                select.setAttribute('data-original', interface);
+                showToast('网络接口已更新', 'success');
+            } else {
+                showToast('更新接口失败', 'error');
+                select.value = originalValue;
+            }
+        }
+    );
+}
+
+/* 初始化 */
+document.addEventListener('DOMContentLoaded', function() {
+    // 为所有下拉框添加原始值属性
+    var selects = document.querySelectorAll('select[onchange]');
+    selects.forEach(function(select) {
+        if (!select.hasAttribute('data-original')) {
+            select.setAttribute('data-original', select.value);
+        }
+    });
+});
+</script>
+
+<%+footer%>

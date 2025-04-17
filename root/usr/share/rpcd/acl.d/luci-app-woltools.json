@@ -1,0 +1,22 @@
+{
+    "luci-app-woltools": {
+        "description": "Grant access to WOL tools",
+        "read": {
+            "uci": [ "woltools" ],
+            "file": {
+                "/etc/config/woltools": [ "read" ],
+                "/usr/bin/woltools": [ "exec" ],
+                "/usr/bin/etherwake": [ "exec" ]
+            },
+            "ubus": {
+                "luci": [ "getInitList" ]
+            }
+        },
+        "write": {
+            "uci": [ "woltools" ],
+            "file": {
+                "/etc/config/woltools": [ "write" ]
+            }
+        }
+    }
+}

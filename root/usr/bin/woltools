@@ -1,0 +1,29 @@
+#!/bin/sh
+
+# 检查依赖命令
+for cmd in etherwake grep; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "Error: Required command '$cmd' not found. Please install it first."
+        exit 1
+    fi
+done
+
+CONFIG="woltools"
+COMMAND="$1"
+MAC="$2"
+INTERFACE="$3"
+
+case "$COMMAND" in
+    wake)
+        if [ -n "$MAC" ] && [ -n "$INTERFACE" ]; then
+            etherwake -i "$INTERFACE" "$MAC"
+            exit $?
+        fi
+        ;;
+    *)
+        echo "Usage: $0 {wake} MAC [PORT]"
+        exit 1
+        ;;
+esac
+
+exit 1

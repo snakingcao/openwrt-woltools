@@ -1,0 +1,9 @@
+config woltools 'config'
+	option enabled '1'
+
+# Example device configuration
+#config device
+#	option name 'My PC'
+#	option mac '00:11:22:33:44:55'
+#	option port '9'
+#	option enabled '1'
